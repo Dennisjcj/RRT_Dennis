@@ -38,6 +38,21 @@ def step_from_to(p1,p2):
     else:
         theta = atan2(p2[1]-p1[1],p2[0]-p1[0])
         return p1[0] + EPSILON*cos(theta), p1[1] + EPSILON*sin(theta)
+    
+def step_from_to_col(p1,p2, obstacles):
+    colid = False
+    lineps = get_line_points([p1,p2])
+    for ps in range(len(lineps)):
+        if obstacle_collision(lineps[ps], obstacles):
+            colid = True
+            break 
+    if colid == True:
+        p1 = lineps[ps-1][0], lineps[ps-1][1]
+        #print "p1", p1
+        return p1
+    else:
+        #print "p2", p2
+        return p2
 
 def point_in_object(x, y, x21, y21, x22, y22):
     if x > x21 and x < x22 and y > y21 and y < y22:
@@ -67,30 +82,99 @@ def obstacle_collision(node, obstacles):
 
 def get_line_points(line):
     linepoints = []
-    if int(line[0][0]) == int(line[1][0]): # vertical
-        if int(line[0][1]) < int(line[1][1]):
-            for y in range(int(line[0][1]),int(line[1][1]+1)):
-                linepoints.append((line[0][0],y))
-        elif int(line[0][1]) > int(line[1][1]):
-            rnge = range(int(line[1][1]),int(line[0][1]+1))
-            for y in rnge[::-1]:
-                linepoints.append((int(line[0][0]),y))
-        else:
-            print 'DDDD'
-    else:
-        xp1 = float(int(line[0][0])-int(line[1][0]))
-        m1 = float(int(line[0][1])-int(line[1][1]))/xp1
-        b1 = int(line[0][1])-m1*int(line[0][0])
-        if int(line[0][0]) < int(line[1][0]):
-            for x in range(int(line[0][0]),int(line[1][0]+1)):
-                linepoints.append((x,int(m1*x+b1)))
-        elif int(line[0][0]) > int(line[1][0]):
-            rnge = range(int(line[1][0]),int(line[0][0]+1))
-            for x in rnge[::-1]:
-                linepoints.append((x,int(m1*x+b1)))
-        else:
-            print 'HELP'
+    p1 = np.array(line[0])
+    p2 = np.array(line[1])
+    numpoints = np.linalg.norm(p1 - p2)
+    x = np.linspace(p1[0], p2[0], numpoints)
+    y = np.linspace(p1[1], p2[1], numpoints)
+    for i in range(len(x)):
+        linepoints.append([x[i],y[i]])
+        
     return linepoints
+
+def ShortenPath(screen, path, obstacles, startpos, goalpos, circsize): 
+    pathnodes = []
+    for n in path:
+        pathnodes.append(n)   
+    path = []
+    for i in range(len(pathnodes)-1):
+        pts = get_line_points([pathnodes[i], pathnodes[i+1]])
+        for p in range(len(pts)-1):
+            path.append(pts[p])
+    path.append(goalpos)         
+        
+    for k in range(2000):
+        newpath = []
+        
+        i = random.randint(0, len(path)-2)
+        s = random.randint(i+1, len(path)-1)
+        #if s-i > 10000:
+        #    s = i+10000
+
+        colid = False
+        lineps = get_line_points([path[i],path[s]])
+        for ps in lineps:
+            if obstacle_collision(ps,obstacles):
+                colid = True    
+                break
+        
+        if colid == False:
+            for p in range(0,i):
+                newpath.append(path[p])
+            #numnodes = dist(path[i][0], path[s][0])
+            xspace = np.linspace(path[i][0], path[s][0], 3)
+            yspace = np.linspace(path[i][1], path[s][1], 3)
+            for p in range(0,len(xspace)):
+                newpath.append(np.array([xspace[p], yspace[p]]))
+            if s != len(path)-1:
+                for p in range(s+1, len(path)):
+                    newpath.append(path[p])
+        elif i+1 < len(path):
+            if dist(path[i], path[s]) > 0:
+                s = i+1
+                for p in range(0,i):
+                    newpath.append(path[p])
+                xspace = np.linspace(path[i][0], path[s][0], 3)
+                yspace = np.linspace(path[i][1], path[s][1], 3)
+                for p in range(0,len(xspace)):
+                    newpath.append(np.array([xspace[p], yspace[p]]))
+                for p in range(s+1, len(path)):
+                    newpath.append(path[p])
+            else:
+                for p in path:
+                    newpath.append(p)
+        else:
+            for p in path:
+                newpath.append(p)
+        
+        path = []
+        for r in range(len(newpath)):
+            path.append(newpath[r])
+        
+        if k%10 == 0:    
+            reset_back(screen, obstacles, startpos, goalpos, circsize, pathnodes)
+            for i in range(len(path)-1):
+                pygame.draw.circle(screen,(255,255,255),(int(path[i][0]),int(path[i][1])),4)
+                pygame.draw.line(screen, (255,255,0), path[i], path[i+1], 3) 
+            pygame.display.update()
+                
+    return path
+
+def reset_back(screen, obstacles, startpos, goalpos, circsize, pathnodes):
+    black = (0,0,0)
+    screen.fill(black)
+    for rect in obstacles:
+        pygame.draw.rect(screen, (255,100,25),rect,0)
+        pygame.draw.circle(screen, (0,255,0), (int(startpos[0]), int(startpos[1])), int(circsize))
+        pygame.draw.circle(screen, (0,0,255), (int(goalpos[0]), int(goalpos[1])), int(circsize))
+    for i in range(len(pathnodes)-1):
+        pygame.draw.line(screen, (255,0,255), pathnodes[i], pathnodes[i+1], 5) 
+            #time.sleep(0.01)
+                #pygame.display.update()
+    for i in range(len(pathnodes)):
+        pygame.draw.circle(screen,(0,255,255),(int(pathnodes[i][0]),int(pathnodes[i][1])),2)
+    pygame.display.update()
+
 
 def main():
     done = False
@@ -100,7 +184,7 @@ def main():
     screen = pygame.display.set_mode(WINSIZE)
     pygame.display.set_caption('RRT      S. LaValle    May 2011')
     white = 255, 240, 200
-    black = 20, 20, 40
+    black = 0, 0, 0
     level = 0
 
     while done == False:
@@ -120,20 +204,24 @@ def main():
             #rect3 = (3*float(XDIM)/5,0,50,500)
             #rect4 = (4*float(XDIM)/5,YDIM-500,50,500)
             
-            #obstacles = [rect1, rect2, rect3, rect4]
-            
+            #rect5 = (1*float(XDIM)/5,0,200,50)
+            #rect6 = (2*float(XDIM)/5,YDIM-500,200,100)
+            #rect7 = (3*float(XDIM)/5,0,200,50)
+            #rect8 = (4*float(XDIM)/5,YDIM-500,200,50)
+                        
             rect1 = (1*float(XDIM)/5-75,50,250,300)
             rect2 = (2*float(XDIM)/5-75,YDIM-350,250,300)
             rect3 = (3*float(XDIM)/5-75,50,250,300)
             rect4 = (4*float(XDIM)/5-75,YDIM-350,250,300)
         
             obstacles = [rect1, rect2, rect3, rect4]
+            #obstacles = [rect1, rect2, rect3, rect4, rect5, rect6, rect7, rect8]
             
             for rect in obstacles:
                 pygame.draw.rect(screen, (255,100,25),rect,0)
                 pygame.display.update()
 
-            circsize = EPSILON*2#10.0
+            circsize = 14.0 #EPSILON*2#10.0
             level = 1 
             
         elif level == 1:
@@ -185,7 +273,7 @@ def main():
             pardict = {}
             
             nodes.append(startpos) 
-            breaknodes = False
+
             countnodes = 0
             for i in range(NUMNODES):
                 countnodes = countnodes + 1
@@ -200,16 +288,33 @@ def main():
                 if breakout == True:
                     break
                 
-                rand = random.random()*float(XDIM), random.random()*float(YDIM)
+                newnode = nodes[-1]
+                if random.random() < 0.2:
+                    rand = goalpos
+                    #print "go to goal"
+                else:
+                    rand = random.random()*float(XDIM), random.random()*float(YDIM)
                 
                 nn = nodes[0]
                 for p in nodes:
                     if dist(p,rand) < dist(nn,rand):
                         nn = p
                         
-                newnode = step_from_to(nn,rand)
-                collided = obstacle_collision(newnode, obstacles)
-                
+                #newnode = step_from_to(nn, rand)
+                newnode = rand
+                #collided = obstacle_collision(newnode, obstacles)
+                collided = False
+                lineps = get_line_points([nn,newnode])
+                for ps in range(len(lineps)):
+                    if obstacle_collision(lineps[ps],obstacles):
+                        newnode = (lineps[ps-1][0], lineps[ps-1][1])
+                        #collided = True    
+                        break
+                print newnode
+                for nd in nodes:
+                    if newnode == nd:
+                        collided = True
+                        break
                 if collided == True:
                     pass
                     #print 'collision'
@@ -221,9 +326,9 @@ def main():
                     pygame.draw.line(screen,white,nn,newnode)
                     pardict[newnode] = nn
                     
-                    if dist(newnode,goalpos) < circsize:
-                        nodes.append(goalpos)
-                        pardict[goalpos] = newnode
+                    if newnode == goalpos: #dist(newnode,goalpos) < circsize:
+                        #nodes.append(goalpos)
+                        #pardict[goalpos] = newnode
                         #print 'goal found'
                         treeend = time.clock()
                         treeduration = treeend-treestart
@@ -262,18 +367,7 @@ def main():
                 level = 0
                 
         elif level == 6:
-            screen.fill(black)
-            for rect in obstacles:
-                pygame.draw.rect(screen, (255,100,25),rect,0)
-            pygame.draw.circle(screen, (0,255,0), (int(startpos[0]), int(startpos[1])), int(circsize))
-            pygame.draw.circle(screen, (0,0,255), (int(goalpos[0]), int(goalpos[1])), int(circsize))
-            for i in range(len(pathnodes)-1):
-                pygame.draw.line(screen, (255,0,255), pathnodes[i], pathnodes[i+1], 5) 
-                #time.sleep(0.01)
-                #pygame.display.update()
-            for i in range(len(pathnodes)):
-                pygame.draw.circle(screen,(0,255,255),(int(pathnodes[i][0]),int(pathnodes[i][1])),2)
-            pygame.display.update()
+            reset_back(screen, obstacles, startpos, goalpos, circsize, pathnodes)
             
             level = 7
         
@@ -289,64 +383,9 @@ def main():
                 
         elif level == 8: # optimization
             optistart = time.clock()
-            oldpath = []
-            newpath = []
-            
-            #print len(pathnodes)
-            for i in range(len(pathnodes)-1):
-                these_points = get_line_points([pathnodes[i],pathnodes[i+1]])
-                for p in range(len(these_points)-1):
-                    oldpath.append(these_points[p])
-            oldpath.append(goalpos)
-            for row in range(len(oldpath)):
-                newpath.append(oldpath[row])
-            #print oldpath
-            for i in range(1000):
-                if i < len(newpath):
-                    rnge = range(i+1,len(oldpath))
-                    rnge = rnge[::-1]
-                    oprev = []
-                    for rr in range(len(rnge)):
-                        oprev.append(oldpath[rnge[rr]])
-                    #print oprev
-                    for j in range(len(oprev)):
-                        print oprev[i],oprev[j]
-                        colid = False
-                        lineps = get_line_points([oldpath[i],oprev[j]])
-                        for ps in lineps:
-                            if obstacle_collision(ps,obstacles):
-                                colid = True
-                        if (colid == True):
-                            newpath.append(oprev[j])
-                        else:
-                            pts = lineps
-                            pts = pts[::-1]
-                            for p in pts:
-                                newpath.append(p)
-                            break
-                oldpath = []
-                for row in range(len(newpath)):
-                    oldpath.append(newpath[row])
-                
-                
-                """screen.fill(black)
-                for rect in obstacles:
-                    pygame.draw.rect(screen, (255,100,25),rect,0)
-                pygame.draw.circle(screen, (0,255,0), (int(startpos[0]), int(startpos[1])), int(circsize))
-                pygame.draw.circle(screen, (0,0,255), (int(goalpos[0]), int(goalpos[1])), int(circsize))
-                for i in range(len(pathnodes)-1):
-                    pygame.draw.line(screen, (255,0,255), pathnodes[i], pathnodes[i+1], 5) 
-                    #time.sleep(0.01)
-                    #pygame.display.update()
-                for i in range(len(pathnodes)):
-                    pygame.draw.circle(screen,(0,255,255),(int(pathnodes[i][0]),int(pathnodes[i][1])),2)
-                pygame.display.update()"""
-                for i in range(len(oldpath)-1):
-                    pygame.draw.line(screen, (255,255,0), newpath[i], newpath[i+1], 2) 
-                    pygame.display.update()
-                    time.sleep(0.001)
-                newpath = []
-                ################################3
+            ShortenPath(screen, pathnodes, obstacles, startpos, goalpos, circsize)
+
+            ################################3
             pygame.display.update()
 
 
